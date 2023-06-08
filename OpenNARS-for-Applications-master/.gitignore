@@ -1,0 +1,12 @@
+NAR.exe
+NAR
+NAR.a
+NAR.so
+NAR.dll
+src/RuleTable.c
+.envrc
+NAR.dSYM/
+
+# For Clangd
+.cache/
+compile_commands.json
