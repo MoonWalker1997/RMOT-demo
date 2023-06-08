@@ -137,5 +137,5 @@ docs/api
 *.onnx
 *.engine
 events.out.tfevents*
-pretrained
+OpenNARS-for-Applications-master/misc/Python/Demo/pretrained
 YOLOX_outputs
