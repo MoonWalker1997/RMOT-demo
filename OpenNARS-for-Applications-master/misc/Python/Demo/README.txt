@@ -1,0 +1,1 @@
+$ python test_hard_coded.py video -f exps/example/mot/yolox_x_mix_det.py -c pretrained/bytetrack_x_mot17.pth.tar --fp16 --fuse --save_result
