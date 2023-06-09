@@ -286,6 +286,10 @@ python3 tools/demo_track.py video -f exps/example/mot/yolox_x_mix_det.py -c pret
 4.  [ncnn in C++](./deploy/ncnn/cpp)
 5.  [Deepstream](./deploy/DeepStream)
 
+## Running the demo
+
+Go to RMOT-demo/OpenNARS-for-Applications-master/misc/Python/Demo/.
+
 ## Citation
 
 ```
