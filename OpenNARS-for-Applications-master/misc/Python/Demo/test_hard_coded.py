@@ -2,6 +2,7 @@ import argparse
 import copy
 import os
 import os.path as osp
+import sys
 import time
 
 import cv2
@@ -17,6 +18,14 @@ from yolox.tracker.byte_tracker import BYTETracker
 from yolox.tracking_utils.timer import Timer
 from yolox.utils import fuse_model, get_model_info, postprocess
 from yolox.utils.visualize import plot_tracking
+
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps/example/mot")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master")))
+os.path.abspath(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master/misc/Python")))
+os.path.abspath(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master/src")))
+os.path.abspath(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master/misc/Python/Demo/pretrained")))
+
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 IDE = True
@@ -95,11 +104,11 @@ class outside_track:
         if appearances is not None:
             # when there is a box "looks" good (similar enough)
             self.appearances[0] = self.appearances[0] * appearance_model_keeping_rate + \
-                                  appearances[0] * (1-appearance_model_keeping_rate)
+                                  appearances[0] * (1 - appearance_model_keeping_rate)
             self.appearances[1] = self.appearances[1] * appearance_model_keeping_rate + \
-                                  appearances[1] * (1-appearance_model_keeping_rate)
+                                  appearances[1] * (1 - appearance_model_keeping_rate)
             self.appearances[2] = self.appearances[2] * appearance_model_keeping_rate + \
-                                  appearances[2] * (1-appearance_model_keeping_rate)
+                                  appearances[2] * (1 - appearance_model_keeping_rate)
             mean = self.mean * detected_state_keeping_rate + mean * (1 - detected_state_keeping_rate)
             self.mean = mean
             self.cov = covariance
@@ -435,7 +444,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                                 outside_tracks[each.track_id].update(new_track=each,
                                                                      momentum=
                                                                      compare_color_hist(hist_target, outside_tracks[
-                                                                        each.track_id].appearances))
+                                                                         each.track_id].appearances))
                                 I1.append(i)
                                 continue
                         else:
