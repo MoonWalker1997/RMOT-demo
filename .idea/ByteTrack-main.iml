@@ -8,6 +8,8 @@
       <sourceFolder url="file://$MODULE_DIR$/OpenNARS-for-Applications-master/misc/Python" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/OpenNARS-for-Applications-master/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/OpenNARS-for-Applications-master/misc/Python/Demo/pretrained" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/OpenNARS-for-Applications-master/misc/Python/MOTChallengeEvalKit-master" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/OpenNARS-for-Applications-master/misc/Python/TrackEval-master" isTestSource="false" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.7 (python37)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

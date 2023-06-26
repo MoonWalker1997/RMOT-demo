@@ -2,6 +2,7 @@ import argparse
 import copy
 import os
 import os.path as osp
+import shutil
 import sys
 import time
 
@@ -21,14 +22,15 @@ from yolox.tracking_utils.timer import Timer
 from yolox.utils import fuse_model, get_model_info, postprocess
 from yolox.utils.visualize import plot_tracking
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps/example/mot")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master")))
-os.path.abspath(
-    os.path.abspath(os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master/misc/Python")))
-os.path.abspath(os.path.abspath(os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master/src")))
-os.path.abspath(os.path.abspath(
-    os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master/misc/Python/Demo/pretrained")))
+# video -f exps/example/mot/yolox_x_mix_det.py -c Demo/pretrained/bytetrack_x_mot17.pth.tar --fp16 --fuse --save_result
+
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps/example/mot")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "TrackEval-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "src")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "pretrained")))
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 IDE = True
@@ -151,7 +153,7 @@ def make_parser():
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
     parser.add_argument(
-        "--path", default="./Demo/videos/liverpool.mp4", help="path to images or video"
+        "--path", default="./Demo/videos/MOT17-09-DPM.mp4", help="path to images or video"
     )
     parser.add_argument("--camid", type=int, default=0, help="webcam demo camera id")
     parser.add_argument(
@@ -451,7 +453,7 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     )
     tracker = BYTETracker(args, frame_rate=30)
     timer = Timer()
-    frame_id = 0
+    frame_id = 1
     results = []
 
     outside_tracks = {}
@@ -467,10 +469,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     apriori_knowledge(reasoner)
 
     while True:
-
-        if frame_id == 112:
-            print(1)
-
         if frame_id % 20 == 0:
             logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
@@ -591,6 +589,8 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
         res_file = osp.join(vis_folder, f"{timestamp}.txt")
         with open(res_file, "w") as f:
             f.writelines(results)
+        shutil.copyfile(res_file, "../TrackEval-master/data/trackers/mot_challenge/MOT17-train/hAIMOT/data/" +
+                        args.path.split("/")[-1].split(".")[0] + ".txt")
         logger.info(f"save results to {res_file}")
 
 
