@@ -151,7 +151,7 @@ def make_parser():
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
     parser.add_argument(
-        "--path", default="./Demo/videos/street.mp4", help="path to images or video"
+        "--path", default="./Demo/videos/liverpool.mp4", help="path to images or video"
     )
     parser.add_argument("--camid", type=int, default=0, help="webcam demo camera id")
     parser.add_argument(
@@ -467,6 +467,10 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
     apriori_knowledge(reasoner)
 
     while True:
+
+        if frame_id == 112:
+            print(1)
+
         if frame_id % 20 == 0:
             logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
@@ -527,15 +531,21 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 matches, unmatched_a, unmatched_b = linear_assignment(1 - post_similarity, thresh=0.6)
 
                 for each_match in matches:
-                    outside_tracks[list(outside_tracks.keys())[each_match[1]]].update(
-                        new_track=online_targets[each_match[0]],
-                        appearances=generate_color_hist(give_img_patch(online_targets[each_match[0]], img_info)))
+                    if iou_similarity[each_match[0], :].mean() <= 1/iou_similarity.shape[1]:
+                        outside_tracks[list(outside_tracks.keys())[each_match[1]]].update(
+                            new_track=online_targets[each_match[0]],
+                            appearances=generate_color_hist(give_img_patch(online_targets[each_match[0]], img_info)))
+                    else:
+                        outside_tracks[list(outside_tracks.keys())[each_match[1]]].update(
+                            new_track=online_targets[each_match[0]],
+                            appearances=outside_tracks[list(outside_tracks.keys())[each_match[1]]].appearances)
 
                 for each_unmatched_a in unmatched_a:
-                    outside_tracks.update({"Track_" + str(outside_track_ID): outside_track(
-                        "Track_" + str(outside_track_ID), online_targets[each_unmatched_a],
-                        generate_color_hist(give_img_patch(online_targets[each_unmatched_a], img_info)))})
-                    outside_track_ID += 1
+                    if online_targets[each_unmatched_a].score > box_score_thresh:
+                        outside_tracks.update({"Track_" + str(outside_track_ID): outside_track(
+                            "Track_" + str(outside_track_ID), online_targets[each_unmatched_a],
+                            generate_color_hist(give_img_patch(online_targets[each_unmatched_a], img_info)))})
+                        outside_track_ID += 1
 
                 for each in outside_tracks:
                     # make the speed of the aspect ratio 0 when not updated (trick wildly used in many MOT codes)
