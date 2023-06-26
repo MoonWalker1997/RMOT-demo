@@ -278,7 +278,8 @@ cd <ByteTrack_HOME>
 python3 tools/demo_track.py video -f exps/example/mot/yolox_x_mix_det.py -c pretrained/bytetrack_x_mot17.pth.tar --fp16 --fuse --save_result
 ```
 
-Run RMOT-demo, go to RMOT-demo/OpenNARS-for-Applications-master/misc/Python/Demo/.
+Run RMOT-demo, go to RMOT-demo/OpenNARS-for-Applications-master/misc/Python/Demo/ for the hard-coded onde. 
+If you would like to run the ONA embeded one, go to RMOT-demo/OpenNARS-for-Applications-master/misc/Python/.
 
 ## Deploy
 
