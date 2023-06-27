@@ -24,13 +24,13 @@ from yolox.utils.visualize import plot_tracking
 
 # video -f exps/example/mot/yolox_x_mix_det.py -c Demo/pretrained/bytetrack_x_mot17.pth.tar --fp16 --fuse --save_result
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "exps/example/mot")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../../..", "OpenNARS-for-Applications-master")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "..", "TrackEval-master")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "src")))
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "pretrained")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps/example/mot")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd())))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "TrackEval-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../..", "src")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "Demo/pretrained")))
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 IDE = True
