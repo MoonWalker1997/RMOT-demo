@@ -2,3 +2,5 @@
 !.gitignore
 !imgs2video_util.py
 !video_spec.txt
+/MOT17/test/
+/MOT17/train/

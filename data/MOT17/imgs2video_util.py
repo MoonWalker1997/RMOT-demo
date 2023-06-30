@@ -7,7 +7,7 @@ import cv2
 def make_parser():
     parser = argparse.ArgumentParser("imgs2videos util")
     parser.add_argument(
-        "spec", default=False,
+        "--spec", default=False,
         help="whether to use 'video_spec.txt', if used, only names in that file will be processed."
     )
     return parser
