@@ -35,9 +35,9 @@ This project is a dev (demo) version of hybrid AI multiple object tracking (hAIM
                    |——————MOT17
                    |      |——————test
                    |      |——————train
-                   |------.gitingore
-                   |------imgs2video_util.py
-                   |------video_spec.txt
+                   |——————.gitingore
+                   |——————imgs2video_util.py
+                   |——————video_spec.txt
      ```
 
    * Run the utility script to generate videos.
