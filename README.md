@@ -77,18 +77,18 @@ This project is a dev (demo) version of hybrid AI multiple object tracking (hAIM
 
    After running the above two demos, you will get a video and a txt file under `RMOT-demo/OpenNARS-for-Applications-master/misc/Python/Demo/YOLOX_outputs/yolox_x_mix_det/track_vis` and `RMOT-demo/OpenNARS-for-Applications-master/misc/Python/YOLOX_outputs/yolox_x_mix_det/track_vis` respectively.
 
-   You need to manually move the txt file and rename it with the name of the corresponding video in MOT17 challenge, then move it to `RMOT-demo/OpenNARS-for-Applications-master/misc/Python/TrackEval-master/data/trackers/mot_challenge/MOT17-train/data`. (Looks like this repo does not support testing :\).
+   You need to manually move the txt file and rename it with the name of the corresponding video in MOT17 challenge (e.g., rename "x.txt" to "MOT17-09-DPM.txt"), then move it to `RMOT-demo/OpenNARS-for-Applications-master/misc/Python/TrackEval-master/data/trackers/mot_challenge/MOT17-train/data`. (Looks like this repo does not support testing :\\).
 
    Then run the following code.
 
    ```bash
    $ cd RMOT-demo/OpenNARS-for-Applications-master/misc/Python/TrackEval-master/scripts
-   $ python run_mot_challenge.py --BENCHMARK MOT17 --SPLIT_TO_EVAL train --TRACKERS_TO_EVAL hAIMOT --METRICS HOTA CLEAR Identity VACE --USE_PARALLEL True --NUM_PARALLEL_CORES 4 --SEQ_INFO MOT17-09-DPM
+   $ python run_mot_challenge.py --BENCHMARK MOT17 --SPLIT_TO_EVAL train --TRACKERS_TO_EVAL hAIMOT --METRICS HOTA CLEAR Identity VACE --USE_PARALLEL True --NUM_PARALLEL_CORES 4 --SEQ_INFO X
    ```
 
    If your device does not support parallel cores, please set the argument `--USE_PARALLEL` to False and delete the argument `--NUM_PARALLEL_CORES`.
 
-   Note that in the end if you don't use the argument `--SEQ_INFO`, it will run the evaluation on ALL MOT challenge videos, otherwise, you will need to spec the names in the end.
+   Note that in the end if you don't use the argument `--SEQ_INFO`, it will run the evaluation on ALL MOT challenge videos, otherwise, you will need to spec the names in the end (replace the "X" mark, multiple names are separated by spaces. E.g., `$ python run_mot_challenge.py --BENCHMARK MOT17 --SPLIT_TO_EVAL train --TRACKERS_TO_EVAL hAIMOT --METRICS HOTA CLEAR Identity VACE --USE_PARALLEL True --NUM_PARALLEL_CORES 4 --SEQ_INFO MOT17-09-DPM MOT17-10-DPM`).
 
 ## Reference
 
