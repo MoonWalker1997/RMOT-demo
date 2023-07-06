@@ -72,8 +72,6 @@ def ious(atlbrs, btlbrs):
 def iou_distance(atracks, btracks, shape = None):
     """
     Compute cost based on IoU
-    :type atracks: list[STrack]
-    :type btracks: list[STrack]
 
     :rtype cost_matrix np.ndarray
     """

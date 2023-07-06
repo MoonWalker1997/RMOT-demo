@@ -146,7 +146,7 @@ def make_parser():
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
     parser.add_argument(
-        "--path", default="./videos/MOT17-13-DPM.mp4", help="path to images or video"
+        "--path", default="./videos/MOT17-04-DPM.mp4", help="path to images or video"
     )
     parser.add_argument("--camid", type=int, default=0, help="webcam demo camera id")
     parser.add_argument(
@@ -205,6 +205,7 @@ def make_parser():
     )
     parser.add_argument("--min_box_area", type=float, default=10, help="filter out tiny boxes")
     parser.add_argument("--mot20", dest="mot20", default=False, action="store_true", help="test mot20.")
+    parser.add_argument("--original", default=False, help="whether to generate the original results of the tracker")
     return parser
 
 
@@ -424,10 +425,6 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
 
     while True:
 
-        if frame_id == 227:
-            print(1)
-            print(10)
-
         if frame_id % 20 == 0:
             logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, 1. / max(1e-5, timer.average_time)))
         ret_val, frame = cap.read()
@@ -440,130 +437,139 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                 # the following is for outside tracker processing
                 # ======================================================================================================
 
-                # pop outdated outside tracks
-                tmp = []
-                for each in outside_tracks:
-                    outside_tracks[each].retire()
-                    if outside_tracks[each].life < -15:
-                        tmp.append(each)
-                for each in tmp:
-                    outside_tracks.pop(each)
+                if not args.original:
 
-                # iou similarities between detected boxes and outside tracks, the higher the similar
-                iou_similarity = 1 - matching.iou_distance(online_targets,
-                                                           [outside_tracks[each] for each in outside_tracks],
-                                                           img_info["raw_img"].shape)
+                    # pop outdated outside tracks
+                    tmp = []
+                    for each in outside_tracks:
+                        outside_tracks[each].retire()
+                        if outside_tracks[each].life < -15:
+                            tmp.append(each)
+                    for each in tmp:
+                        outside_tracks.pop(each)
 
-                # iou similarities between online targets, this is used to find these "pure" (with no overlapping)
-                # detections
-                inter_iou_similarity = 1 - matching.iou_distance(online_targets,
-                                                                 online_targets,
-                                                                 img_info["raw_img"].shape)
+                    # iou similarities between detected boxes and outside tracks, the higher the similar
+                    iou_similarity = 1 - matching.iou_distance(online_targets,
+                                                               [outside_tracks[each] for each in outside_tracks],
+                                                               img_info["raw_img"].shape)
 
-                # DL consistent, whether the ID of the outside track is consistent with the ID from NN
-                I1 = []
+                    # iou similarities between online targets, this is used to find these "pure" (with no overlapping)
+                    # detections
+                    inter_iou_similarity = 1 - matching.iou_distance(online_targets,
+                                                                     online_targets,
+                                                                     img_info["raw_img"].shape)
 
-                for i, each in enumerate(online_targets):
+                    # DL consistent, whether the ID of the outside track is consistent with the ID from NN
+                    I1 = []
 
-                    if each.track_id in outside_tracks:
+                    for i, each in enumerate(online_targets):
+
+                        if each.track_id in outside_tracks:
+
+                            hist_target = generate_color_hist(give_img_patch(each, img_info))
+
+                            # when the outside track is still "on tracking"
+                            if outside_tracks[each.track_id].life >= 0:
+
+                                # if iou similarity > iou_similarity_thresh
+                                if iou_similarity[i, list(outside_tracks.keys()).index(each.track_id)] > \
+                                        iou_similarity_thresh_DLC:
+
+                                    # one assumption (not too strong) is that the appearance of one object will not be
+                                    # TOO different in tracking. So, there is no need to update the appearance
+                                    # constantly. The appearance will be updated when this appearance is "pure"
+                                    # (with no overlapping with other detections).
+
+                                    I1.append(i)
+
+                                    # here, we "trust" that the online target is consistent with the corresponding
+                                    # outside track, therefore, we WILL update the KF of the outside track with the
+                                    # online target. The remaining problem is to determine whether the appearance needs
+                                    # to be updated, which is determined by whether the appearance of the online target
+                                    # is "pure" (with no overlapping)
+
+                                    AP = proportion_private(each, online_targets, inter_iou_similarity, i, img_info)
+                                    if AP >= outside_tracks[each.track_id].appearance_purity or AP >= 0.9:
+                                        # the appearance is "pure"
+                                        outside_tracks[each.track_id].update(new_track=each,
+                                                                             appearances=hist_target,
+                                                                             appearance_purity=AP)
+                                    else:
+                                        # the appearance is not "pure"
+                                        outside_tracks[each.track_id].update(new_track=each)
+                                else:
+                                    outside_tracks[each.track_id].retire()
+                            else:
+                                # here, the outside track is still "considered", but not on tracking, and so using IoU
+                                # is no longer reliable, therefore, the appearance is used instead
+
+                                if compare_color_hist(hist_target, outside_tracks[each.track_id].appearances) > \
+                                        appearance_similarity_thresh:
+                                    # the outside track will be refreshed
+
+                                    I1.append(i)
+
+                                    outside_tracks[each.track_id] = outside_track(each,
+                                                                                  hist_target,
+                                                                                  proportion_private(each,
+                                                                                                     online_targets,
+                                                                                                     inter_iou_similarity,
+                                                                                                     i, img_info))
+
+                    # global consistent
+                    # if the ID (existed tracker) of the box is inconsistent, to which ID (outside track) it should
+                    # belong
+                    I2 = []
+                    for i, each in enumerate(online_targets):
+
+                        if i in I1:
+                            continue
 
                         hist_target = generate_color_hist(give_img_patch(each, img_info))
 
-                        # when the outside track is still "on tracking"
-                        if outside_tracks[each.track_id].life >= 0:
+                        for j, each_id in enumerate(outside_tracks):
+                            # at least the iou similarity should be large enough and they should look similar
+                            if iou_similarity[i, j] > iou_similarity_thresh_GLC and \
+                                    compare_color_hist(hist_target, outside_tracks[each_id].appearances) > \
+                                    appearance_similarity_thresh:
 
-                            # if iou similarity > iou_similarity_thresh
-                            if iou_similarity[i, list(outside_tracks.keys()).index(each.track_id)] > \
-                                    iou_similarity_thresh_DLC:
+                                I2.append(i)
 
-                                # one assumption (not too strong) is that the appearance of one object will not be TOO
-                                # different in tracking. So, there is no need to update the appearance constantly.
-                                # The appearance will be updated when this appearance is "pure" (with no overlapping
-                                # with other detections).
-
-                                I1.append(i)
-
-                                # here, we "trust" that the online target is consistent with the corresponding outside
-                                # track, therefore, we WILL update the KF of the outside track with the online target.
-                                # The remaining problem is to determine whether the appearance needs to be updated,
-                                # which is determined by whether the appearance of the online target is "pure" (with no
-                                # overlapping)
-
+                                # then whether the online target is "pure" could be used to determine the details of
+                                # this updating
                                 AP = proportion_private(each, online_targets, inter_iou_similarity, i, img_info)
-                                if AP >= outside_tracks[each.track_id].appearance_purity or AP >= 0.9:
+                                if AP >= outside_tracks[each_id].appearance_purity or AP >= 0.9:
                                     # the appearance is "pure"
-                                    outside_tracks[each.track_id].update(new_track=each,
-                                                                         appearances=hist_target,
-                                                                         appearance_purity=AP)
+                                    outside_tracks[each_id].update(new_track=each,
+                                                                   appearances=hist_target,
+                                                                   appearance_purity=AP)
                                 else:
                                     # the appearance is not "pure"
-                                    outside_tracks[each.track_id].update(new_track=each)
-                            else:
-                                outside_tracks[each.track_id].retire()
-                        else:
-                            # here, the outside track is still "considered", but not on tracking, and so using IoU is
-                            # no longer reliable, therefore, the appearance is used instead
+                                    outside_tracks[each_id].update(new_track=each)
 
-                            if compare_color_hist(hist_target, outside_tracks[each.track_id].appearances) > \
-                                    appearance_similarity_thresh:
-                                # the outside track will be refreshed
+                                break
 
-                                I1.append(i)
+                    # brand-new track creation
+                    for i, each in enumerate(online_targets):
+                        if i in I1 + I2:
+                            continue
 
-                                outside_tracks[each.track_id] = outside_track(each,
-                                                                              hist_target,
-                                                                              proportion_private(each, online_targets,
-                                                                                                 inter_iou_similarity,
-                                                                                                 i, img_info))
-
-                # global consistent
-                # if the ID (existed tracker) of the box is inconsistent, to which ID (outside track) it should belong
-                I2 = []
-                for i, each in enumerate(online_targets):
-
-                    if i in I1:
-                        continue
-
-                    hist_target = generate_color_hist(give_img_patch(each, img_info))
-
-                    for j, each_id in enumerate(outside_tracks):
-                        # at least the iou similarity should be large enough and they should look similar
-                        if iou_similarity[i, j] > iou_similarity_thresh_GLC and \
-                                compare_color_hist(hist_target, outside_tracks[each_id].appearances) > \
-                                appearance_similarity_thresh:
-
-                            I2.append(i)
-
-                            # then whether the online target is "pure" could be used to determine the details of
-                            # this updating
-                            AP = proportion_private(each, online_targets, inter_iou_similarity, i, img_info)
-                            if AP >= outside_tracks[each_id].appearance_purity or AP >= 0.9:
-                                # the appearance is "pure"
-                                outside_tracks[each_id].update(new_track=each,
-                                                               appearances=hist_target,
-                                                               appearance_purity=AP)
-                            else:
-                                # the appearance is not "pure"
-                                outside_tracks[each_id].update(new_track=each)
-
-                            break
-
-                # brand-new track creation
-                for i, each in enumerate(online_targets):
-                    if i in I1 + I2:
-                        continue
-
-                    # to create a new outside track, the quality of the box should be high enough
-                    # and it is not the track with a "negative life"
-                    if each.score > box_score_thresh and each.track_id not in outside_tracks:
-                        hist_target = generate_color_hist(give_img_patch(each, img_info))
-                        outside_tracks[each.track_id] = outside_track(each,
-                                                                      hist_target,
-                                                                      proportion_private(each, online_targets,
-                                                                                         inter_iou_similarity,
-                                                                                         i, img_info))
+                        # to create a new outside track, the quality of the box should be high enough
+                        # and it is not the track with a "negative life"
+                        if each.score > box_score_thresh and each.track_id not in outside_tracks:
+                            hist_target = generate_color_hist(give_img_patch(each, img_info))
+                            outside_tracks[each.track_id] = outside_track(each,
+                                                                          hist_target,
+                                                                          proportion_private(each, online_targets,
+                                                                                             inter_iou_similarity,
+                                                                                             i, img_info))
 
                 # ======================================================================================================
+
+                if args.original:
+                    outside_tracks = {}
+                    for each in online_targets:
+                        outside_tracks.update({each.track_id: each})
 
                 online_tlwhs = []
                 online_ids = []
@@ -590,15 +596,18 @@ def imageflow_demo(predictor, vis_folder, current_time, args):
                     img_info["raw_img"], online_tlwhs, online_ids, frame_id=frame_id + 1, fps=1. / timer.average_time
                 )
 
-                for each in outside_tracks:
+                if not args.original:
 
-                    if outside_tracks[each].life >= 0:
-                        # make the speed of the aspect ratio 0 when not updated (trick wildly used in many MOT codes)
-                        if not outside_tracks[each].touched:
-                            outside_tracks[each].mean[7] = 0
-                        outside_tracks[each].predict()
-                        outside_tracks[each].touched = False
-                        outside_tracks[each].touched_appearance = False
+                    for each in outside_tracks:
+
+                        if outside_tracks[each].life >= 0:
+                            # make the speed of the aspect ratio 0 when not updated (trick wildly used in many MOT
+                            # codes)
+                            if not outside_tracks[each].touched:
+                                outside_tracks[each].mean[7] = 0
+                            outside_tracks[each].predict()
+                            outside_tracks[each].touched = False
+                            outside_tracks[each].touched_appearance = False
 
             else:
                 timer.toc()
