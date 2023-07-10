@@ -8,7 +8,7 @@ MOT17 challenge.
 """
 
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import cv2
 import numpy as np
@@ -233,8 +233,12 @@ def compare_color_hist(hist1, hist2):
 # read external tracker results and images
 
 video_length = 1050
-imgs_path = ""
-external_trackers = {}
+imgs_path = "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/MOT17/MOT17/train/MOT17-04-DPM/img1/"
+external_trackers = {"yolox-l": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/MOT17-04-DPM-1.txt",
+                     "yolox-m": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/MOT17-04-DPM-2.txt",
+                     "yolox-s": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/MOT17-04-DPM-3.txt",
+                     "yolox-x": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/MOT17-04-DPM-4.txt"
+                     }
 
 video_manager = video_manager(imgs_path, video_length)
 for each in external_trackers:
@@ -246,7 +250,7 @@ outside_track_ID = 1
 outside_tracks = {}
 results = []
 vid_writer = cv2.VideoWriter(
-    "x.mp4",
+    "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/OpenNARS-for-Applications-master/misc/Python/YOLOX_outputs/hai/res.mp4",
     cv2.VideoWriter_fourcc(*"mp4v"), 30, (int(1920), int(1080))
 )
 
@@ -499,7 +503,7 @@ for _ in range(video_length):
     vid_writer.write(online_im)
     frame_id += 1
 
-res_file = "C:\\Users\\TORY\\OneDrive - Temple University\\AGI research\\RMOT Demo\\RMOT-demo\\OpenNARS-for-Applications-master\\misc\\Python\\YOLOX_outputs\\hai\\res.txt"
+res_file = "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/OpenNARS-for-Applications-master/misc/Python/YOLOX_outputs/hai/res.txt"
 with open(res_file, "w") as f:
     f.writelines(results)
 logger.info(f"save results to {res_file}")
