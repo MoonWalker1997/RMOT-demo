@@ -7,6 +7,7 @@ It is called "offline" since it needs the result from multiple trackers in advan
 MOT17 challenge.
 """
 import os
+import sys
 import time
 
 import cv2
@@ -21,6 +22,14 @@ from yolox.utils.visualize import plot_tracking
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 np.set_printoptions(2, suppress=True)
+
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "exps/example/mot")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..", "OpenNARS-for-Applications-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd())))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "TrackEval-master")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../..", "src")))
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "Demo/pretrained")))
 
 min_correspondence_thresh = 5  # > 0, integer
 max_lost_track_tolerance = 15  # > 0, integer
