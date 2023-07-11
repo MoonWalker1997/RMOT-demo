@@ -241,7 +241,7 @@ class video_manager:
 
     def __init__(self, path, video_length):
         self.frame_id = 1
-        self.path = path
+        self.path = path + "/"
         self.length = video_length
 
     def next_frame(self):
@@ -255,32 +255,28 @@ class video_manager:
 video_length = 1050
 
 # cv2.videoCap might be better
-imgs_path = "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/MOT17/MOT17/train/" \
-            "MOT17-04-DPM/img1/"
+imgs_path = os.path.abspath(os.path.join(os.getcwd(), "../../../", "data/MOT17/MOT17/train/MOT17-04-DPM/img1/"))
 
 external_trackers = {
-    "yoloxl": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/"
-              "MOT17-04-DPM-1.txt",
-    "yoloxm": "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/data/trackers/"
-              "MOT17-04-DPM-2.txt"}
+    "yoloxl": os.path.abspath(os.path.join(os.getcwd(), "../../../", "data/trackers/MOT17-04-DPM-1.txt")),
+    "yoloxm": os.path.abspath(os.path.join(os.getcwd(), "../../../", "data/trackers/MOT17-04-DPM-2.txt"))}
 
 video_manager = video_manager(imgs_path, video_length)
 for each in external_trackers:
     external_trackers[each] = external_tracker_manager(external_trackers[each], video_length)
-ground_truth = external_tracker_manager("C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/"
-                                        "data/MOT17/MOT17/train/MOT17-04-SDP/gt/gt.txt",
-                                        video_length)
+ground_truth = external_tracker_manager(
+    os.path.abspath(os.path.join(os.getcwd(), "../../../", "data/MOT17/MOT17/train/MOT17-04-SDP/gt/gt.txt")),
+    video_length)
 
 frame_id = 1
 time_a = time.time()
 outside_track_ID = 1
 outside_tracks = {}
 results = []  # for the txt file
-vid_writer = cv2.VideoWriter(
-    "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/OpenNARS-for-Applications-master/misc/"
-    "Python/YOLOX_outputs/hai/res.mp4",
-    cv2.VideoWriter_fourcc(*"mp4v"), 30, (int(1920), int(1080))
-)
+vid_writer = cv2.VideoWriter(os.path.abspath(os.path.join(os.getcwd(), "YOLOX_outputs/hai/res.mp4")),
+                             cv2.VideoWriter_fourcc(*"mp4v"),
+                             30,
+                             (int(1920), int(1080)))
 reasoner.Reset()
 
 show_reasoning = False
@@ -293,9 +289,9 @@ for _ in range(video_length):
 
     # processing each frame
 
-    if frame_id % 20 == 0:
+    if frame_id % 5 == 0:
         time_b = time.time()
-        fps = 20. / max(1e-5, time_b - time_a)
+        fps = 5. / max(1e-5, time_b - time_a)
         logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, fps))
         time_a = time_b
 
@@ -321,7 +317,7 @@ for _ in range(video_length):
         tlbr_outside_tracks = np.array([outside_tracks[each].tlbr for each in outside_tracks])
 
         # comprehensive similarity used for bipartite matching
-        comprehensive_similarity = np.zeros(img.shape)
+        comprehensive_similarity = np.zeros((img.shape[0], img.shape[1]))
 
         # iou similarities between external tracker results and outside tracks, the higher the similar
         iou_similarity = 1 - matching.iou_distance(tlbr_tracking,
@@ -341,6 +337,8 @@ for _ in range(video_length):
         # storage for save some complexity
         cls = [None for _ in range(len(tracking))]  # cleanness score
         hists_target = [None for _ in range(len(tracking))]
+
+        I = []
 
         # try to evaluate each pair of outside tracks and tracking
         for i, each in enumerate(tracking):
@@ -389,8 +387,8 @@ for _ in range(video_length):
 
                 # check the ground truth
                 # ------------------------------------------------------------------------------------------------------
-                gt_idx = np.where([tmp[1] for tmp in gt] == outside_tracks[each_id].label_ID)
-                if len(gt_idx) != 0 and gt_iou_similarity[i, gt_idx[0]] > iou_similarity_thresh_GT:
+                gt_idx = np.where([tmp[1] for tmp in gt] == outside_tracks[each_id].label_ID)[0]
+                if gt_idx.size != 0 and gt_iou_similarity[i, gt_idx[0]] > iou_similarity_thresh_GT:
                     # this external tracker and this track should be matched
                     reasoner.AddInput("match. :|: %1.0;0.9%", show_reasoning)
                 else:
@@ -405,31 +403,51 @@ for _ in range(video_length):
                 r = reasoner.AddInput("match?", show_reasoning)
                 for each_answer in r["answers"]:
                     if each_answer["term"] == "match":
-                        comprehensive_similarity[i, j] = each_answer["truth"]["expectation"]
+                        comprehensive_similarity[i, j] = float(each_answer["truth"]["confidence"]) * (
+                                float(each_answer["truth"]["frequency"]) - 0.5) + 0.5
 
                 matches, unmatched_a, unmatched_b = linear_assignment(1 - comprehensive_similarity, thresh=0.6)
 
                 for each_match in matches:
+                    I.append(each_match[0])
                     ot_id = list(outside_tracks.keys())[each_match[1]]
                     outside_tracks[ot_id].to_update.append([each[2: 6],
                                                             each[6],
                                                             hist_target,
                                                             max(0.1, cl)])
 
-                gt_matches, _, _ = linear_assignment(1 - gt_iou_similarity, thresh=0.9)
+        gt_matches, _, _ = linear_assignment(1 - gt_iou_similarity, thresh=0.9)
 
-                for each_unmatched_a in unmatched_a:
-                    if each_unmatched_a in [tmp[0] for tmp in gt_matches]:
-                        label_ID = gt[[tmp[0] for tmp in gt_matches].index(each_unmatched_a)][1]
-                        outside_tracks.update({outside_track_ID:
-                                                   outside_track(ID=outside_track_ID,
-                                                                 label_ID=label_ID,
-                                                                 tlwh=each[2:6],
-                                                                 score=each[6],
-                                                                 appearances=hist_target,
-                                                                 appearance_score=max(0.1, cl))})
-                    external_trackers[each_external_tracker].correspondence.update({each[1]: [outside_track_ID, 1]})
-                    outside_track_ID += 1
+        for i, each in enumerate(tracking):
+
+            if each[6] < box_score_thresh or i in I:  # does not track low quality and considered box
+                continue
+
+            # get the cleanness
+            if cls[i] is not None:
+                cl = cls[i]
+            else:
+                cl = cleanness(tlbr_tracking[i], tlbr_tracking, inter_iou_similarity, i, img)
+                cls[i] = cl
+
+            # get the appearance (color-hist currently)
+            if hists_target[i] is not None:
+                hist_target = hists_target[i]
+            else:
+                hist_target = generate_color_hist(img_patch(tlbr_tracking[i], img))
+                hists_target[i] = hist_target
+
+            if i in [tmp[0] for tmp in gt_matches]:
+                label_ID = gt[[tmp[0] for tmp in gt_matches].index(i)][1]
+                outside_tracks.update({outside_track_ID:
+                                           outside_track(ID=outside_track_ID,
+                                                         label_ID=label_ID,
+                                                         tlwh=each[2:6],
+                                                         score=each[6],
+                                                         appearances=hist_target,
+                                                         appearance_score=max(0.1, cl))})
+            external_trackers[each_external_tracker].correspondence.update({each[1]: [outside_track_ID, 1]})
+            outside_track_ID += 1
 
     # pick the best to update/initialize
     for each in outside_tracks:
@@ -485,8 +503,7 @@ for _ in range(video_length):
     vid_writer.write(online_im)
     frame_id += 1
 
-res_file = "C:/Users/TORY/OneDrive - Temple University/AGI research/RMOT Demo/RMOT-demo/" \
-           "OpenNARS-for-Applications-master/misc/Python/YOLOX_outputs/hai/res.txt"
+res_file = os.path.abspath(os.path.join(os.getcwd(), "YOLOX_outputs/hai/res.txt"))
 
 with open(res_file, "w") as f:
     f.writelines(results)
