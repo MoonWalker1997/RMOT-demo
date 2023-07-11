@@ -15,6 +15,8 @@ import lap
 import numpy as np
 from loguru import logger
 
+sys.path.append(os.path.abspath(os.path.join(os.getcwd(), "../../..")))
+
 import NAR as reasoner
 from yolox.tracker import matching
 from yolox.tracker.kalman_filter import KalmanFilter
@@ -246,6 +248,36 @@ class external_tracker_manager:
             self.correspondence.update({external_tracker_ID: [outside_track_ID, 1]})
 
 
+class ground_truth_manager:
+
+    def __init__(self, path, video_length):
+        self.frame = 1
+        self.index = 0
+        self.length = video_length
+        with open(path) as file:
+            tmp = file.readlines()
+        self.data = []
+        for i in range(len(tmp)):
+            self.data.append([float(each) for each in tmp[i].strip("\n").split(",")])
+        self.data.sort(key=lambda x: x[0])
+        self.correspondence = {}  # format: {tracker ID: [outside_track ID, count]}
+
+    def next_frame(self):
+        if self.frame > self.length:
+            return None
+        ret = []
+        for i in range(self.index, len(self.data)):
+            if self.data[i][0] == self.frame:
+                ret.append(self.data[i])
+            else:
+                self.index = i
+                self.frame += 1
+                break
+        # format: [frame, object ID, top left x, top left y, width, height, score, -, -, -]
+        # tlwh in short
+        return ret
+
+
 class video_manager:
 
     def __init__(self, path, video_length):
@@ -273,7 +305,7 @@ external_trackers = {
 video_manager = video_manager(imgs_path, video_length)
 for each in external_trackers:
     external_trackers[each] = external_tracker_manager(external_trackers[each], video_length)
-ground_truth = external_tracker_manager(
+ground_truth = ground_truth_manager(
     os.path.abspath(os.path.join(os.getcwd(), "../../../", "data/MOT17/MOT17/train/MOT17-04-SDP/gt/gt.txt")),
     video_length)
 
@@ -378,11 +410,11 @@ for _ in range(video_length):
 
                 # the first question: whether the target looks like the track
                 hist_similarity = compare_color_hist(hist_target, outside_tracks[each_id].appearances)
-                reasoner.AddInput("similar. :|: %" + str(hist_similarity) + ";0.9%", show_reasoning)
+                reasoner.AddInput("similar. :|: %" + str(min(1, max(0, hist_similarity))) + ";0.9%", show_reasoning)
 
                 # the second question: whether the target is close to the track
                 reasoner.AddInput("*concurrent", show_reasoning)
-                reasoner.AddInput("close. :|: %" + str(iou_similarity[i, j]) + ";0.9%", show_reasoning)
+                reasoner.AddInput("close. :|: %" + str(min(1, max(0, iou_similarity[i, j]))) + ";0.9%", show_reasoning)
 
                 # the third question: whether the tracking is trustful
                 reasoner.AddInput("*concurrent", show_reasoning)
@@ -406,7 +438,7 @@ for _ in range(video_length):
                 # ------------------------------------------------------------------------------------------------------
 
                 # use the reasoner to "learn from the ground truth"
-                reasoner.AddInput("10", show_reasoning)
+                reasoner.AddInput("1", show_reasoning)
 
                 # ask whether they should be matched (even this has been mentioned in the learning process)
                 r = reasoner.AddInput("match?", show_reasoning)
@@ -415,15 +447,15 @@ for _ in range(video_length):
                         comprehensive_similarity[i, j] = float(each_answer["truth"]["confidence"]) * (
                                 float(each_answer["truth"]["frequency"]) - 0.5) + 0.5
 
-                matches, unmatched_a, unmatched_b = linear_assignment(1 - comprehensive_similarity, thresh=0.6)
+        matches, unmatched_a, unmatched_b = linear_assignment(1 - comprehensive_similarity, thresh=0.6)
 
-                for each_match in matches:
-                    I.append(each_match[0])
-                    ot_id = list(outside_tracks.keys())[each_match[1]]
-                    outside_tracks[ot_id].to_update.append([each[2: 6],
-                                                            each[6],
-                                                            hist_target,
-                                                            max(0.1, cl)])
+        for each_match in matches:
+            I.append(each_match[0])
+            ot_id = list(outside_tracks.keys())[each_match[1]]
+            outside_tracks[ot_id].to_update.append([each[2: 6],
+                                                    each[6],
+                                                    hist_target,
+                                                    max(0.1, cl)])
 
         gt_matches, _, _ = linear_assignment(1 - gt_iou_similarity, thresh=0.9)
 
