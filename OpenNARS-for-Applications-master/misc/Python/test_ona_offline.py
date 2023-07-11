@@ -330,9 +330,9 @@ for _ in range(video_length):
 
     # processing each frame
 
-    if frame_id % 5 == 0:
+    if frame_id % 1 == 0:
         time_b = time.time()
-        fps = 5. / max(1e-5, time_b - time_a)
+        fps = 1. / max(1e-5, time_b - time_a)
         logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, fps))
         time_a = time_b
 
@@ -354,6 +354,9 @@ for _ in range(video_length):
 
     for each_external_tracker in external_trackers:
         tracking = external_trackers[each_external_tracker].next_frame()
+
+        print(len(tracking) * len(gt))
+
         tlbr_tracking = np.array([tlwh_to_tlbr(each[2: 6]) for each in tracking])
         tlbr_outside_tracks = np.array([outside_tracks[each].tlbr for each in outside_tracks])
 
@@ -417,14 +420,14 @@ for _ in range(video_length):
                 reasoner.AddInput("close. :|: %" + str(min(1, max(0, iou_similarity[i, j]))) + ";0.9%", show_reasoning)
 
                 # the third question: whether the tracking is trustful
-                reasoner.AddInput("*concurrent", show_reasoning)
-                if each[1] not in external_trackers[each_external_tracker].correspondence:
-                    c = 0
-                else:
-                    c = external_trackers[each_external_tracker].correspondence[each[1]][0]
-                reasoner.AddInput(
-                    "<(" + each_external_tracker + str(each[1]) + "," + str(each_id) + ") --> trust>. %" + str(
-                        c / (c + 1)) + ";0.9%", show_reasoning)
+                # reasoner.AddInput("*concurrent", show_reasoning)
+                # if each[1] not in external_trackers[each_external_tracker].correspondence:
+                #     c = 0
+                # else:
+                #     c = external_trackers[each_external_tracker].correspondence[each[1]][0]
+                # reasoner.AddInput(
+                #     "<(" + each_external_tracker + str(each[1]) + "," + str(each_id) + ") --> trust>. %" + str(
+                #         c / (c + 1)) + ";0.9%", show_reasoning)
 
                 # check the ground truth
                 # ------------------------------------------------------------------------------------------------------
