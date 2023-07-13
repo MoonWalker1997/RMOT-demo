@@ -41,7 +41,7 @@ iou_similarity_thresh_DRC = 0.5  # [0, 1]
 appearance_similarity_thresh = 0.7  # [0, 1]
 iou_similarity_thresh_GLC = 0.2  # [0, 1]
 iou_similarity_thresh_GT = 0.9  # [0, 1]
-box_score_thresh = 0.85  # [0, 1]
+box_score_thresh = 0.7  # [0, 1]
 
 
 def tlwh_to_tlbr(tlwh):
@@ -243,7 +243,7 @@ class external_tracker_manager:
     def update_correspondence(self, external_tracker_ID, outside_track_ID):
         if external_tracker_ID in self.correspondence:
             if self.correspondence[external_tracker_ID][0] == outside_track_ID:
-                self.correspondence[1] += 1
+                self.correspondence[external_tracker_ID][1] += 1
         else:
             self.correspondence.update({external_tracker_ID: [outside_track_ID, 1]})
 
@@ -321,6 +321,7 @@ vid_writer = cv2.VideoWriter(os.path.abspath(os.path.join(os.getcwd(), "YOLOX_ou
 reasoner.Reset()
 
 show_reasoning = False
+debugging = True
 fps = 0
 
 for _ in range(video_length):
@@ -329,12 +330,6 @@ for _ in range(video_length):
         print(1)
 
     # processing each frame
-
-    if frame_id % 1 == 0:
-        time_b = time.time()
-        fps = 1. / max(1e-5, time_b - time_a)
-        logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, fps))
-        time_a = time_b
 
     # get the frame
     img = video_manager.next_frame()
@@ -352,16 +347,39 @@ for _ in range(video_length):
     gt = ground_truth.next_frame()
     tlbr_gt = np.array([tlwh_to_tlbr(each[2: 6]) for each in gt])
 
+    """
+    reasoning is for those uncertain
+    """
+
+    trustful = []
+
     for each_external_tracker in external_trackers:
         tracking = external_trackers[each_external_tracker].next_frame()
 
-        print(len(tracking) * len(gt))
+        if debugging:
+            print("num_reasoning: ", len(tracking) * len(gt))
 
         tlbr_tracking = np.array([tlwh_to_tlbr(each[2: 6]) for each in tracking])
         tlbr_outside_tracks = np.array([outside_tracks[each].tlbr for each in outside_tracks])
 
+        pre_matches = []
+        for i, each in enumerate(tracking):
+            if each[1] in external_trackers[each_external_tracker].correspondence \
+                    and external_trackers[each_external_tracker].correspondence[each[1]][0] in outside_tracks \
+                    and external_trackers[each_external_tracker].correspondence[each[1]][1] > 10:
+                pre_matches.append([i, external_trackers[each_external_tracker].correspondence[each[1]][0]])
+
+        if debugging:
+            print("num_prematches: ", len(pre_matches))
+
+        I = [each[0] for each in pre_matches]
+        J = [each[1] for each in pre_matches]
+
+        I_ref = [i for i in range(len(tracking)) if i not in I]
+        J_ref = [j for j in range(len(outside_tracks)) if j not in J]
+
         # comprehensive similarity used for bipartite matching
-        comprehensive_similarity = np.zeros((img.shape[0], img.shape[1]))
+        comprehensive_similarity = np.zeros((len(I_ref), len(J_ref)))
 
         # iou similarities between external tracker results and outside tracks, the higher the similar
         iou_similarity = 1 - matching.iou_distance(tlbr_tracking,
@@ -382,29 +400,29 @@ for _ in range(video_length):
         cls = [None for _ in range(len(tracking))]  # cleanness score
         hists_target = [None for _ in range(len(tracking))]
 
-        I = []
-
         # try to evaluate each pair of outside tracks and tracking
-        for i, each in enumerate(tracking):
+        for i, each in enumerate([tracking[tmp] for tmp in I_ref]):
 
             if each[6] < box_score_thresh:  # does not track low quality box
                 continue
 
             # get the cleanness
-            if cls[i] is not None:
-                cl = cls[i]
+            if cls[I_ref[i]] is not None:
+                cl = cls[I_ref[i]]
             else:
-                cl = cleanness(tlbr_tracking[i], tlbr_tracking, inter_iou_similarity, i, img)
-                cls[i] = cl
+                cl = cleanness(tlbr_tracking[I_ref[i]], tlbr_tracking, inter_iou_similarity, I_ref[i], img)
+                cls[I_ref[i]] = cl
 
             # get the appearance (color-hist currently)
-            if hists_target[i] is not None:
-                hist_target = hists_target[i]
+            if hists_target[I_ref[i]] is not None:
+                hist_target = hists_target[I_ref[i]]
             else:
-                hist_target = generate_color_hist(img_patch(tlbr_tracking[i], img))
-                hists_target[i] = hist_target
+                hist_target = generate_color_hist(img_patch(tlbr_tracking[I_ref[i]], img))
+                hists_target[I_ref[i]] = hist_target
 
-            for j, each_id in enumerate(outside_tracks):
+            outside_tracks_keys = list(outside_tracks.keys())
+            outside_tracks_keys = [outside_tracks_keys[tmp] for tmp in J_ref]
+            for j, each_id in enumerate(outside_tracks_keys):
 
                 if hist_target is None:
                     # this is to avoid some boxes outside the scope, there is still one bbox, but its area is 0
@@ -417,7 +435,8 @@ for _ in range(video_length):
 
                 # the second question: whether the target is close to the track
                 reasoner.AddInput("*concurrent", show_reasoning)
-                reasoner.AddInput("close. :|: %" + str(min(1, max(0, iou_similarity[i, j]))) + ";0.9%", show_reasoning)
+                reasoner.AddInput("close. :|: %" + str(min(1, max(0, iou_similarity[I_ref[i], J_ref[j]]))) + ";0.9%",
+                                  show_reasoning)
 
                 # the third question: whether the tracking is trustful
                 # reasoner.AddInput("*concurrent", show_reasoning)
@@ -431,8 +450,10 @@ for _ in range(video_length):
 
                 # check the ground truth
                 # ------------------------------------------------------------------------------------------------------
-                gt_idx = np.where([tmp[1] for tmp in gt] == outside_tracks[each_id].label_ID)[0]
-                if gt_idx.size != 0 and gt_iou_similarity[i, gt_idx[0]] > iou_similarity_thresh_GT:
+                gt_idx = None
+                if outside_tracks[each_id].label_ID in [tmp[1] for tmp in gt]:
+                    gt_idx = [tmp[1] for tmp in gt].index(outside_tracks[each_id].label_ID)
+                if gt_idx is not None and gt_iou_similarity[I_ref[i], gt_idx] > iou_similarity_thresh_GT:
                     # this external tracker and this track should be matched
                     reasoner.AddInput("match. :|: %1.0;0.9%", show_reasoning)
                 else:
@@ -444,21 +465,58 @@ for _ in range(video_length):
                 reasoner.AddInput("1", show_reasoning)
 
                 # ask whether they should be matched (even this has been mentioned in the learning process)
-                r = reasoner.AddInput("match?", show_reasoning)
+                r = reasoner.AddInput("match? :|:", show_reasoning)
                 for each_answer in r["answers"]:
                     if each_answer["term"] == "match":
                         comprehensive_similarity[i, j] = float(each_answer["truth"]["confidence"]) * (
                                 float(each_answer["truth"]["frequency"]) - 0.5) + 0.5
+                        break
 
         matches, unmatched_a, unmatched_b = linear_assignment(1 - comprehensive_similarity, thresh=0.6)
 
         for each_match in matches:
-            I.append(each_match[0])
-            ot_id = list(outside_tracks.keys())[each_match[1]]
-            outside_tracks[ot_id].to_update.append([each[2: 6],
-                                                    each[6],
-                                                    hist_target,
-                                                    max(0.1, cl)])
+
+            I.append(I_ref[each_match[0]])
+
+            external_trackers[each_external_tracker].update_correspondence(tracking[I_ref[each_match[0]]][1],
+                                                                           outside_tracks_keys[each_match[1]])
+
+            if hists_target[I_ref[each_match[0]]] is not None:
+                hist_target = hists_target[I_ref[each_match[0]]]
+            else:
+                hist_target = generate_color_hist(img_patch(tlbr_tracking[I_ref[each_match[0]]], img))
+                hists_target[I_ref[each_match[0]]] = hist_target
+
+            each_match = [int(tmp) for tmp in each_match]
+            ot_id = list(outside_tracks.keys())[J_ref[each_match[1]]]
+            outside_tracks[ot_id].to_update.append([tracking[I_ref[each_match[0]]][2: 6],
+                                                    tracking[I_ref[each_match[0]]][6],
+                                                    hists_target[I_ref[each_match[0]]],
+                                                    max(0.1, cls[I_ref[each_match[0]]])])
+
+        for each_match in pre_matches:
+
+            # get the cleanness
+            if cls[each_match[0]] is not None:
+                cl = cls[each_match[0]]
+            else:
+                cl = cleanness(tlbr_tracking[each_match[0]], tlbr_tracking, inter_iou_similarity, each_match[0], img)
+                cls[each_match[0]] = cl
+
+            # get the appearance (color-hist currently)
+            if hists_target[each_match[0]] is not None:
+                hist_target = hists_target[each_match[0]]
+            else:
+                hist_target = generate_color_hist(img_patch(tlbr_tracking[each_match[0]], img))
+                hists_target[each_match[0]] = hist_target
+
+            each_match = [int(tmp) for tmp in each_match]
+            ot_id = each_match[1]
+
+            outside_tracks[ot_id].to_update.append([tracking[each_match[0]][2: 6],
+                                                    tracking[each_match[0]][6],
+                                                    hists_target[each_match[0]],
+                                                    max(0.1, cls[each_match[0]])])
 
         gt_matches, _, _ = linear_assignment(1 - gt_iou_similarity, thresh=0.9)
 
@@ -482,7 +540,7 @@ for _ in range(video_length):
                 hists_target[i] = hist_target
 
             if i in [tmp[0] for tmp in gt_matches]:
-                label_ID = gt[[tmp[0] for tmp in gt_matches].index(i)][1]
+                label_ID = gt[gt_matches[[tmp[0] for tmp in gt_matches].index(i)][1]][1]
                 outside_tracks.update({outside_track_ID:
                                            outside_track(ID=outside_track_ID,
                                                          label_ID=label_ID,
@@ -509,6 +567,12 @@ for _ in range(video_length):
                 else:
                     outside_tracks[each].initialize(*d)
 
+    if debugging:
+        print("num outside_tracks: ", len(outside_tracks))
+
+    if debugging:
+        print("--------------------")
+
     # ==================================================================================================================
 
     # txt writer
@@ -532,6 +596,11 @@ for _ in range(video_length):
                     f"{frame_id},{tid},{tlwh[0]:.2f},{tlwh[1]:.2f},{tlwh[2]:.2f},{tlwh[3]:.2f},"
                     f"{outside_tracks[each].score:.2f},-1,-1,-1\n"
                 )
+    if frame_id % 1 == 0:
+        time_b = time.time()
+        fps = 1. / max(1e-5, time_b - time_a)
+        logger.info("Processing frame {} ({:.2f} fps)".format(frame_id, fps))
+        time_a = time_b
     online_im = plot_tracking(img, online_tlwhs, online_ids, frame_id=frame_id + 1, fps=fps)
 
     for each in outside_tracks:
