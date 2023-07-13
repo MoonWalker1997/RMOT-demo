@@ -40,7 +40,7 @@ non_detected_speed_penalty = 0.01  # [0, 1]
 iou_similarity_thresh_DRC = 0.5  # [0, 1]
 appearance_similarity_thresh = 0.7  # [0, 1]
 iou_similarity_thresh_GLC = 0.2  # [0, 1]
-iou_similarity_thresh_GT = 0.9  # [0, 1]
+iou_similarity_thresh_GT = 0.7  # [0, 1]
 box_score_thresh = 0.7  # [0, 1]
 
 
@@ -431,11 +431,15 @@ for _ in range(video_length):
 
                 # the first question: whether the target looks like the track
                 hist_similarity = compare_color_hist(hist_target, outside_tracks[each_id].appearances)
-                reasoner.AddInput("similar. :|: %" + str(min(1, max(0, hist_similarity))) + ";0.9%", show_reasoning)
+                reasoner.AddInput("<(" + each_external_tracker + "_" + str(int(tracking[I_ref[i]][1])) + " * " + str(
+                    int(outside_tracks_keys[j])) + ") --> similar>. :|: %" + str(
+                    min(1, max(0, hist_similarity))) + ";0.9%", show_reasoning)
 
                 # the second question: whether the target is close to the track
                 reasoner.AddInput("*concurrent", show_reasoning)
-                reasoner.AddInput("close. :|: %" + str(min(1, max(0, iou_similarity[I_ref[i], J_ref[j]]))) + ";0.9%",
+                reasoner.AddInput("<(" + each_external_tracker + "_" + str(int(tracking[I_ref[i]][1])) + " * " + str(
+                    int(outside_tracks_keys[j])) + ") --> close>. :|: %" + str(
+                    min(1, max(0, iou_similarity[I_ref[i], J_ref[j]]))) + ";0.9%",
                                   show_reasoning)
 
                 # the third question: whether the tracking is trustful
@@ -455,22 +459,31 @@ for _ in range(video_length):
                     gt_idx = [tmp[1] for tmp in gt].index(outside_tracks[each_id].label_ID)
                 if gt_idx is not None and gt_iou_similarity[I_ref[i], gt_idx] > iou_similarity_thresh_GT:
                     # this external tracker and this track should be matched
-                    reasoner.AddInput("match. :|: %1.0;0.9%", show_reasoning)
+                    reasoner.AddInput(
+                        "<(" + each_external_tracker + "_" + str(int(tracking[I_ref[i]][1])) + " * " + str(
+                            int(outside_tracks_keys[j])) + ") --> match>. :|: %1.0;0.9%", show_reasoning)
                 else:
                     # this external tracker and this track should not be matched
-                    reasoner.AddInput("match. :|: %0.0;0.9%", show_reasoning)
+                    reasoner.AddInput(
+                        "<(" + each_external_tracker + "_" + str(int(tracking[I_ref[i]][1])) + " * " + str(
+                            int(outside_tracks_keys[j])) + ") --> match>. :|: %0.0;0.9%", show_reasoning)
                 # ------------------------------------------------------------------------------------------------------
 
                 # use the reasoner to "learn from the ground truth"
                 reasoner.AddInput("1", show_reasoning)
 
                 # ask whether they should be matched (even this has been mentioned in the learning process)
-                r = reasoner.AddInput("match? :|:", show_reasoning)
+                r = reasoner.AddInput("<(" + each_external_tracker+"_"+str(int(tracking[I_ref[i]][1])) + " * " + str(int(outside_tracks_keys[j])) + ") --> match>? :|:", show_reasoning)
                 for each_answer in r["answers"]:
-                    if each_answer["term"] == "match":
-                        comprehensive_similarity[i, j] = float(each_answer["truth"]["confidence"]) * (
-                                float(each_answer["truth"]["frequency"]) - 0.5) + 0.5
-                        break
+                    if "match" in each_answer["term"]:
+                        A, B = each_answer["term"].split("-->")[0].split(" * ")[0].strip("<("), each_answer["term"].split("-->")[0].split(" * ")[1].strip(") ")
+                        A1, A2 = A.split("_")
+                        if A1 == each_external_tracker:
+                            A_idx = I_ref.index(list(np.array(tracking)[:, 1]).index(int(A2)))
+                            B_idx = outside_tracks_keys.index(int(B))
+                            comprehensive_similarity[A_idx, B_idx] = float(each_answer["truth"]["confidence"]) * (
+                                    float(each_answer["truth"]["frequency"]) - 0.5) + 0.5
+                            break
 
         matches, unmatched_a, unmatched_b = linear_assignment(1 - comprehensive_similarity, thresh=0.6)
 
